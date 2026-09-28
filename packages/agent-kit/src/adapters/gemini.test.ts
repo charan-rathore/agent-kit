@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { recursiveGeminiZodToJsonSchema } from "./gemini";
+import {
+  recursiveGeminiZodToJsonSchema,
+  requestParser,
+  responseParser,
+} from "./gemini";
 
 // Utility to deep-clone objects without preserving references
 const clone = <T>(obj: T): T => {
@@ -196,5 +200,77 @@ describe("recursiveGeminiZodToJsonSchema", () => {
 
     recursiveGeminiZodToJsonSchema(input);
     expect(input).toEqual(inputClone);
+  });
+});
+
+describe("Gemini function-call thought signatures", () => {
+  const tool = {
+    type: "tool" as const,
+    name: "lookup",
+    id: "lookup",
+    input: { code: "A1" },
+  };
+
+  test("retains a signature on the function-call part during the next request", () => {
+    const response = {
+      candidates: [
+        {
+          content: {
+            role: "model",
+            parts: [
+              {
+                functionCall: { name: "lookup", args: { code: "A1" } },
+                thoughtSignature: "opaque-signature",
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const parsed = responseParser(response as never);
+    expect(parsed).toEqual([
+      {
+        role: "assistant",
+        type: "tool_call",
+        stop_reason: "tool",
+        tools: [{ ...tool, thoughtSignature: "opaque-signature" }],
+      },
+    ]);
+    const next = requestParser({} as never, parsed, [], "auto");
+    expect(next.contents[0]).toEqual({
+      role: "model",
+      parts: [
+        {
+          functionCall: { name: "lookup", args: { code: "A1" } },
+          thoughtSignature: "opaque-signature",
+        },
+      ],
+    });
+  });
+
+  test("keeps unsigned function calls compatible with earlier Gemini models", () => {
+    const parsed = responseParser({
+      candidates: [
+        {
+          content: {
+            role: "model",
+            parts: [{ functionCall: { name: "lookup", args: { code: "A1" } } }],
+          },
+        },
+      ],
+    } as never);
+    expect(parsed).toEqual([
+      {
+        role: "assistant",
+        type: "tool_call",
+        stop_reason: "tool",
+        tools: [tool],
+      },
+    ]);
+    const next = requestParser({} as never, parsed, [], "auto");
+    expect(next.contents[0]).toEqual({
+      role: "model",
+      parts: [{ functionCall: { name: "lookup", args: { code: "A1" } } }],
+    });
   });
 });

@@ -101,6 +101,10 @@ export const responseParser: AgenticModel.ResponseParser<Gemini.AiModel> = (
         candidate.content.role === "model" &&
         "functionCall" in content
       ) {
+        // @inngest/ai's Part type predates Gemini's thoughtSignature field.
+        const thoughtSignature = (
+          content as unknown as { thoughtSignature?: string }
+        ).thoughtSignature;
         messages.push({
           role: "assistant",
           type: "tool_call",
@@ -111,6 +115,7 @@ export const responseParser: AgenticModel.ResponseParser<Gemini.AiModel> = (
               input: content.functionCall.args,
               type: "tool",
               id: content.functionCall.name,
+              ...(thoughtSignature !== undefined ? { thoughtSignature } : {}),
             },
           ],
         });
@@ -170,6 +175,9 @@ const messageToContent = (
                   name: m.tools[0]!.name,
                   args: m.tools[0]!.input,
                 },
+                ...(m.tools[0]!.thoughtSignature !== undefined
+                  ? { thoughtSignature: m.tools[0]!.thoughtSignature }
+                  : {}),
               },
             ],
           };
@@ -195,6 +203,9 @@ const messageToContent = (
                   name: m.tools[0]!.name,
                   args: m.tools[0]!.input,
                 },
+                ...(m.tools[0]!.thoughtSignature !== undefined
+                  ? { thoughtSignature: m.tools[0]!.thoughtSignature }
+                  : {}),
               },
             ],
           };

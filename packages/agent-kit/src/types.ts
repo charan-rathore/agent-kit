@@ -91,6 +91,8 @@ export interface ToolMessage {
   id: string;
   name: string;
   input: Record<string, unknown>;
+  /** Gemini's opaque signature for replaying a function call in the next turn. */
+  thoughtSignature?: string;
 }
 
 /**
